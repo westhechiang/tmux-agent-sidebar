@@ -20,7 +20,7 @@ pub const BOTTOM_PANEL_HEIGHT: u16 = 20;
 /// Rows reserved between the pane list and the bottom panel when the pet is
 /// enabled. The pet and its desk/chair all render inside this band so they
 /// never overdraw the pane list above or the bottom panel's border below.
-pub const PET_SCENE_HEIGHT: u16 = 5;
+pub const PET_SCENE_HEIGHT: u16 = 6;
 
 /// Read `@sidebar_bottom_height` from tmux global options, falling back to the default.
 /// A value of 0 hides the bottom panel entirely.

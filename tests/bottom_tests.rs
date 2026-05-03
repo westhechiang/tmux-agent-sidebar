@@ -1549,10 +1549,11 @@ fn test_pet_enabled_preserves_bottom_panel_border() {
     ⓘ                                    — ▾
     project
     ┃ ○ claude
-        Waiting for prompt…
-      ▄ ▄  ▄ ▄
-     ▄▀▀▀▄ ▄▀▀▀▄                       ▄▄▄▄
-      ▀ ▀  ▀ ▀                      ▟▙ ████
+      ▙ ▟   ▙ ▟
+     ▙███▟ ▙███▟
+     █▘█▝█ █▘█▝█
+     ▝███▘ █████                       ▄▄▄▄
+     ▖█ █▖ ▖█ █▖                    ▟▙ ████
     ╭ Activity │ Git ──────────────────────╮
     │            No activity yet           │
     ╰──────────────────────────────────────╯
