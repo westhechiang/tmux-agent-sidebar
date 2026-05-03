@@ -141,12 +141,6 @@ pub struct AppState {
     /// any post-checkout hooks (husky, pnpm install, …) can take many
     /// seconds; running them inline froze the sidebar.
     pub pending_spawn_rx: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
-    /// Cell rectangle (x, y, cols, rows) where the pet PNG should be
-    /// painted by the Kitty-graphics pass after the ratatui frame is
-    /// flushed. Set every render by `draw_pet`; consumed by
-    /// `app::render::render_frame`. `None` when the pet is disabled
-    /// or the bottom band has zero height.
-    pub pet_image_rect: Option<(u16, u16, u16, u16)>,
 }
 
 impl AppState {
@@ -195,7 +189,6 @@ impl AppState {
             sessions: SessionNamesState::new(),
             pet_enabled: false,
             pending_spawn_rx: None,
-            pet_image_rect: None,
         };
         crate::state::pet::reseed_pet_idle_motion(&mut state);
         state

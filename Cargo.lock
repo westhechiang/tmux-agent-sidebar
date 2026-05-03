@@ -1536,7 +1536,6 @@ name = "tmux-agent-sidebar"
 version = "0.10.1"
 dependencies = [
  "arboard",
- "base64",
  "crossterm",
  "indexmap",
  "indoc",
