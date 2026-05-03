@@ -28,16 +28,35 @@ pub(super) fn handle_event(
         }
         Event::Key(key) if state.is_spawn_input_open() => {
             needs_redraw = true;
-            match key.code {
-                KeyCode::Esc => state.close_spawn_input(),
-                KeyCode::Enter => state.confirm_spawn_input(),
-                KeyCode::Tab | KeyCode::Down => state.spawn_input_next_field(),
-                KeyCode::BackTab | KeyCode::Up => state.spawn_input_prev_field(),
-                KeyCode::Left => state.spawn_input_cycle(-1),
-                KeyCode::Right => state.spawn_input_cycle(1),
-                KeyCode::Backspace => state.spawn_input_pop_char(),
-                KeyCode::Char(c) => state.spawn_input_push_char(c),
-                _ => {}
+            // While a background `git worktree add` is running, ignore
+            // every key except Esc. The orphan worker thread is the
+            // only thing allowed to mutate this popup until it finishes
+            // — otherwise a second Enter would fire a duplicate spawn
+            // against the same task name.
+            if state.is_spawn_pending() {
+                if key.code == KeyCode::Esc {
+                    state.close_spawn_input();
+                }
+            } else {
+                match key.code {
+                    KeyCode::Esc => state.close_spawn_input(),
+                    KeyCode::Enter => {
+                        if let Some(req) = state.confirm_spawn_input() {
+                            let (tx, rx) = std::sync::mpsc::channel();
+                            state.pending_spawn_rx = Some(rx);
+                            std::thread::spawn(move || {
+                                let _ = tx.send(crate::worktree::spawn(&req));
+                            });
+                        }
+                    }
+                    KeyCode::Tab | KeyCode::Down => state.spawn_input_next_field(),
+                    KeyCode::BackTab | KeyCode::Up => state.spawn_input_prev_field(),
+                    KeyCode::Left => state.spawn_input_cycle(-1),
+                    KeyCode::Right => state.spawn_input_cycle(1),
+                    KeyCode::Backspace => state.spawn_input_pop_char(),
+                    KeyCode::Char(c) => state.spawn_input_push_char(c),
+                    _ => {}
+                }
             }
         }
         Event::Key(key) if state.is_remove_confirm_open() => {

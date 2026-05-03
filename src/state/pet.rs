@@ -63,7 +63,12 @@ impl AppState {
         let running_count = self.running_count();
 
         // Pet stops so the seated sprite leaves one column before the desk.
-        let working_width = crate::ui::pet::CHAIR_WIDTH + 3;
+        // Boston (right pup) is the one that sits at the log writing —
+// her body sprite begins at sprite-column 7, with Frenchie filling
+// columns 0–4 to her left. To land Boston's feet on the mushroom
+// stool at `chair_x`, the entire 10-column sprite must start nine
+// columns earlier than the original 5-column single-pet sprite did.
+let working_width = crate::ui::pet::CHAIR_WIDTH + 9;
         let stop_x = panel_width.saturating_sub(
             crate::ui::pet::DESK_OFFSET + crate::ui::pet::DESK_WIDTH + working_width,
         );
@@ -291,7 +296,12 @@ mod tests {
             panes: vec![(pane, PaneGitInfo::default())],
         }];
         let panel_width = 60u16;
-        let working_width = crate::ui::pet::CHAIR_WIDTH + 3;
+        // Boston (right pup) is the one that sits at the log writing —
+// her body sprite begins at sprite-column 7, with Frenchie filling
+// columns 0–4 to her left. To land Boston's feet on the mushroom
+// stool at `chair_x`, the entire 10-column sprite must start nine
+// columns earlier than the original 5-column single-pet sprite did.
+let working_width = crate::ui::pet::CHAIR_WIDTH + 9;
         let stop_x = panel_width.saturating_sub(
             crate::ui::pet::DESK_OFFSET + crate::ui::pet::DESK_WIDTH + working_width,
         );
