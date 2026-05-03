@@ -1,5 +1,8 @@
 /target
 /bin
+/concepts
+/TRASH
+TRASH-FILES.md
 .DS_Store
 .worktrees
 .claude/*.lock

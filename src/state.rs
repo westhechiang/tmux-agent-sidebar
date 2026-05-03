@@ -134,6 +134,13 @@ pub struct AppState {
     /// Whether the pet animation is drawn and ticked. Loaded once at startup
     /// from the `@sidebar_pet` tmux option. Defaults to `false`.
     pub pet_enabled: bool,
+    /// Receives the result of a backgrounded `worktree::spawn` once the
+    /// worker thread finishes. `Some(_)` while a spawn is in flight,
+    /// cleared by the main loop after `finalize_pending_spawn` consumes
+    /// the result. Off the UI thread because `git worktree add` plus
+    /// any post-checkout hooks (husky, pnpm install, …) can take many
+    /// seconds; running them inline froze the sidebar.
+    pub pending_spawn_rx: Option<std::sync::mpsc::Receiver<Result<String, String>>>,
 }
 
 impl AppState {
@@ -181,6 +188,7 @@ impl AppState {
             bottom_panel_height: crate::ui::BOTTOM_PANEL_HEIGHT,
             sessions: SessionNamesState::new(),
             pet_enabled: false,
+            pending_spawn_rx: None,
         };
         crate::state::pet::reseed_pet_idle_motion(&mut state);
         state

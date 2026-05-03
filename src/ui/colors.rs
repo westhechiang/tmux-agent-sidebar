@@ -62,8 +62,8 @@ impl Default for ColorTheme {
             agent_claude: Color::Indexed(174),
             agent_codex: Color::Indexed(141),
             agent_opencode: Color::Indexed(117),
-            pet_body: Color::Indexed(208),
-            pet_eye: Color::Indexed(114),
+            pet_body: Color::Indexed(235),
+            pet_eye: Color::Indexed(231),
             text_active: Color::Indexed(255),
             text_muted: Color::Indexed(252),
             text_inactive: Color::Indexed(244),
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn pet_color_defaults_match_current_palette() {
         let theme = ColorTheme::default();
-        assert_eq!(theme.pet_body, Color::Indexed(208));
-        assert_eq!(theme.pet_eye, Color::Indexed(114));
+        assert_eq!(theme.pet_body, Color::Indexed(235));
+        assert_eq!(theme.pet_eye, Color::Indexed(231));
     }
 }

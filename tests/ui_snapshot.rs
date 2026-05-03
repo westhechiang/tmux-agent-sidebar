@@ -1976,7 +1976,7 @@ fn snapshot_spawn_modal_compact_layout_shows_inline_error() {
     let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
     let mut state = make_state_for_popup_tests(vec![repo_group_with_root("proj", vec![pane])]);
     state.open_spawn_input_for_repo("proj".into(), "/home/u/proj".into(), None);
-    state.confirm_spawn_input();
+    let _ = state.confirm_spawn_input();
     let output = render_to_string(&mut state, 40, 14);
     insta::assert_snapshot!(output, @r"
      ≡1  ●0  ◎0  ◐0  ○1  ✕0
@@ -2257,7 +2257,7 @@ fn snapshot_spawn_modal_shows_inline_error_when_task_empty() {
     state.open_spawn_input_for_repo("proj".into(), "/home/u/proj".into(), None);
     // Press Enter with no input — should set the inline error row,
     // NOT close the popup.
-    state.confirm_spawn_input();
+    let _ = state.confirm_spawn_input();
     assert!(state.is_spawn_input_open(), "popup must stay open on error");
     let output = render_to_string(&mut state, 34, 18);
     insta::assert_snapshot!(output, @"
@@ -2283,7 +2283,7 @@ fn snapshot_spawn_modal_clears_error_after_typing() {
     let pane = make_pane(AgentType::Claude, PaneStatus::Idle);
     let mut state = make_state_for_popup_tests(vec![repo_group_with_root("proj", vec![pane])]);
     state.open_spawn_input_for_repo("proj".into(), "/home/u/proj".into(), None);
-    state.confirm_spawn_input(); // triggers the "name is empty" error
+    let _ = state.confirm_spawn_input(); // triggers the "name is empty" error
     // Typing a character should clear the error so the user isn't
     // staring at a stale message while they fix their input.
     state.spawn_input_push_char('x');

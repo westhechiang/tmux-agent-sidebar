@@ -63,6 +63,11 @@ pub enum PopupState {
         /// user was editing. Cleared on the next edit / field change.
         error: Option<String>,
         area: Option<ratatui::layout::Rect>,
+        /// True while a background `git worktree add` / tmux spawn is
+        /// running for this popup. Used to ignore Enter (no double
+        /// dispatch) and to render a "spawning…" indicator. Set by
+        /// `confirm_spawn_input`, cleared by `finalize_pending_spawn`.
+        pending: bool,
     },
     /// Confirmation prompt shown when the user presses `x` on a
     /// spawn-created pane. `pane_id` feeds `worktree::remove`; `branch`
@@ -220,7 +225,15 @@ impl AppState {
             anchor_y,
             error: None,
             area: None,
+            pending: false,
         };
+    }
+
+    /// Whether the spawn input popup is currently dispatching a
+    /// background spawn. While `true`, key handlers must ignore edits
+    /// and re-confirm so the orphan worker thread is the only writer.
+    pub fn is_spawn_pending(&self) -> bool {
+        matches!(self.popup, PopupState::SpawnInput { pending: true, .. })
     }
 
     pub fn open_spawn_input_from_selection(&mut self) {
@@ -353,26 +366,37 @@ impl AppState {
         }
     }
 
-    /// Run the spawn flow against the repo stored in the popup, using
-    /// the agent / mode the user picked. On success the popup closes
-    /// silently (the new window appearing in the sidebar is the
-    /// feedback). On failure the error is surfaced inside the popup
-    /// and the modal stays open so the user can retry.
-    pub fn confirm_spawn_input(&mut self) {
+    /// Validate the spawn popup's inputs and, on success, mark the
+    /// popup as pending and return the [`SpawnRequest`] for the caller
+    /// to dispatch on a background thread. Returns `None` (and leaves
+    /// an inline error on the popup) if validation fails or if a
+    /// previous spawn is still running.
+    ///
+    /// Dispatching the actual `git worktree add` here would block the
+    /// TUI event loop for as long as git takes — on a large repo with
+    /// post-checkout hooks (husky, pnpm install, …) that is many
+    /// seconds and looks like the sidebar has frozen.
+    /// [`finalize_pending_spawn`] handles the worker's response.
+    #[must_use = "caller must dispatch the returned SpawnRequest on a background thread"]
+    pub fn confirm_spawn_input(&mut self) -> Option<crate::worktree::SpawnRequest> {
         let PopupState::SpawnInput {
             input,
             target_repo_root,
             agent_idx,
             mode_idx,
+            pending,
             ..
         } = &self.popup
         else {
-            return;
+            return None;
         };
+        if *pending {
+            return None;
+        }
         let task_name = input.trim().to_string();
         if task_name.is_empty() {
             self.set_spawn_error("name is empty");
-            return;
+            return None;
         }
         let agent = crate::worktree::AGENTS
             .get(*agent_idx)
@@ -388,19 +412,36 @@ impl AppState {
 
         let Some(session) = crate::tmux::pane_session_name(&self.tmux_pane) else {
             self.set_spawn_error("could not resolve tmux session");
-            return;
+            return None;
         };
 
-        let req = crate::worktree::SpawnRequest {
+        if let PopupState::SpawnInput { pending, error, .. } = &mut self.popup {
+            *pending = true;
+            *error = None;
+        }
+
+        Some(crate::worktree::SpawnRequest {
             repo_root,
             task_name,
             session,
             agent,
             mode,
-        };
-        match crate::worktree::spawn(&req) {
+        })
+    }
+
+    /// Apply the result of a backgrounded spawn. On `Ok` the popup is
+    /// closed (the new agent window appearing in the sidebar is the
+    /// feedback). On `Err` the inline error stays visible so the user
+    /// can fix the input and retry.
+    pub fn finalize_pending_spawn(&mut self, result: Result<String, String>) {
+        match result {
             Ok(_) => self.popup = PopupState::None,
-            Err(e) => self.set_spawn_error(e),
+            Err(e) => {
+                if let PopupState::SpawnInput { pending, error, .. } = &mut self.popup {
+                    *pending = false;
+                    *error = Some(e);
+                }
+            }
         }
     }
 
@@ -684,6 +725,7 @@ mod tests {
             anchor_y,
             error,
             area,
+            pending,
         } = &state.popup
         {
             assert!(input.is_empty());
@@ -695,6 +737,7 @@ mod tests {
             assert_eq!(*anchor_y, Some(7));
             assert!(error.is_none());
             assert!(area.is_none());
+            assert!(!pending);
         } else {
             panic!("expected SpawnInput, got {:?}", state.popup);
         }
@@ -817,9 +860,13 @@ mod tests {
     fn confirm_spawn_input_empty_sets_error() {
         let mut state = AppState::new("%99".into());
         state.open_spawn_input_for_repo("alpha".into(), "/tmp/alpha".into(), None);
-        state.confirm_spawn_input();
-        if let PopupState::SpawnInput { error, .. } = &state.popup {
+        assert!(
+            state.confirm_spawn_input().is_none(),
+            "empty input must not produce a SpawnRequest"
+        );
+        if let PopupState::SpawnInput { error, pending, .. } = &state.popup {
             assert_eq!(error.as_deref(), Some("name is empty"));
+            assert!(!pending, "validation failure must not arm pending");
         } else {
             panic!("popup must stay open on error");
         }

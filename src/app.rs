@@ -121,6 +121,24 @@ pub fn run(
             needs_redraw = true;
         }
 
+        if let Some(rx) = state.pending_spawn_rx.as_ref() {
+            match rx.try_recv() {
+                Ok(result) => {
+                    state.finalize_pending_spawn(result);
+                    state.pending_spawn_rx = None;
+                    needs_redraw = true;
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    // Worker dropped tx without sending — treat as a
+                    // failure rather than wedging the popup in pending.
+                    state.finalize_pending_spawn(Err("spawn worker exited without result".into()));
+                    state.pending_spawn_rx = None;
+                    needs_redraw = true;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
+        }
+
         state
             .global
             .flush_pending_cursor_save(std::time::Duration::from_millis(120));
