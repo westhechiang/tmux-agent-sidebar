@@ -1,3 +1,10 @@
+// Block-art sprites + helpers below `draw_pet` are kept on the shelf as
+// a fallback in case the Kitty-graphics image path turns out flaky on
+// some terminal. They're unreachable at runtime today, but the
+// data + tests still document the original duo design — easier to
+// re-enable than to redesign from scratch.
+#![allow(dead_code)]
+
 use ratatui::{
     Frame,
     layout::Rect,
@@ -783,81 +790,24 @@ fn walking_vertical_lift(state: &crate::state::AppState) -> u16 {
 ///  ▀ ▀        ▀▀ ████
 ///                 ████
 /// ```
-pub fn draw_pet(frame: &mut Frame, state: &AppState, bottom_area: Rect, running_count: usize) {
+pub fn draw_pet(frame: &mut Frame, state: &mut AppState, bottom_area: Rect, _running_count: usize) {
     if bottom_area.height == 0 || bottom_area.width == 0 {
+        state.pet_image_rect = None;
         return;
     }
-    let panel_width = bottom_area.width;
-    // Baseline: the bottom-most row for all elements, inside the drawable area.
-    let baseline = bottom_area.y + bottom_area.height - 1;
-
-    // --- Positions ---
-    let desk_x = bottom_area.x + panel_width.saturating_sub(DESK_OFFSET + DESK_WIDTH + 1);
-    let chair_x = desk_x.saturating_sub(CHAIR_WIDTH + CHAIR_DESK_GAP);
-
-    // --- Draw pet first (so desk/chair render on top if overlapping) ---
-    let sprite_lines = match state.pet_state {
-        PetState::Idle => idle_sprite(idle_motion(state)),
-        PetState::WalkRight => match walking_sprite_frame(state) {
-            1 => walking_right_1(),
-            2 => walking_right_2(),
-            3 => walking_right_3(),
-            _ => walking_right_1(),
-        },
-        PetState::Working => working_sprite(state),
-        PetState::WalkLeft => match walking_sprite_frame(state) {
-            1 => walking_left_1(),
-            2 => walking_left_2(),
-            3 => walking_left_3(),
-            _ => walking_left_1(),
-        },
-    };
-    let sprite_lines = recolor_sprite(sprite_lines, state.theme.pet_body, state.theme.pet_eye);
-
-    let sprite_height = sprite_lines.len() as u16;
-    let pet_y = match state.pet_state {
-        PetState::Working => {
-            // Pet sits on top of chair: 1 row above baseline
-            baseline.saturating_sub(sprite_height)
-        }
-        PetState::Idle if matches!(idle_motion(state), IdleMotion::Jump) => {
-            baseline.saturating_sub(sprite_height)
-        }
-        PetState::Idle => baseline.saturating_sub(sprite_height - 1),
-        PetState::WalkRight | PetState::WalkLeft => {
-            baseline.saturating_sub(sprite_height - 1 + walking_vertical_lift(state))
-        }
-    };
-    let pet_x = bottom_area.x + state.pet_x;
-    render_lines(frame, &sprite_lines, pet_x, pet_y);
-
-    // --- Draw chair (always visible) ---
-    let chair_lines = chair_sprite();
-    let chair_height = chair_lines.len() as u16;
-    let chair_y = baseline.saturating_sub(chair_height - 1);
-    render_lines(frame, &chair_lines, chair_x, chair_y);
-
-    // --- Draw desk (legs on baseline, top plate one row above) ---
-    let desk_lines = desk_sprite();
-    let desk_height = desk_lines.len() as u16;
-    let desk_y = baseline.saturating_sub(desk_height - 1);
-    render_lines(frame, &desk_lines, desk_x, desk_y);
-
-    // --- Draw papers above desk ---
-    if running_count > 0 {
-        let papers = paper_sprite(running_count);
-        if !papers.is_empty() {
-            let paper_y = desk_y.saturating_sub(papers.len() as u16 + working_paper_lift(state));
-            let paper_x = desk_x
-                + 1
-                + if working_paper_lift(state) == 1 {
-                    state.pet_working_paper_x_offset
-                } else {
-                    0
-                };
-            render_lines(frame, &papers, paper_x, paper_y);
-        }
-    }
+    // Hand the cell rectangle to the Kitty-graphics emitter that runs
+    // after ratatui flushes its frame. We clear the cells here so the
+    // image isn't chewed at the edges by stale glyphs from a prior
+    // frame; ratatui's `Clear` widget writes blanks into the buffer
+    // for the rectangle, which then get painted over by the actual
+    // PNG via `pet_image::emit_pet_frame`.
+    state.pet_image_rect = Some((
+        bottom_area.x,
+        bottom_area.y,
+        bottom_area.width,
+        bottom_area.height,
+    ));
+    frame.render_widget(ratatui::widgets::Clear, bottom_area);
 }
 
 /// Helper to render a slice of Lines at given position, clipping to frame bounds.
@@ -1097,103 +1047,8 @@ mod tests {
         assert_eq!(walking_vertical_lift(&state), 0);
     }
 
-    /// Helper: render draw_pet into a buffer and return as string for visual inspection.
-    fn render_pet_scene(state: &AppState, running_count: usize, width: u16, height: u16) -> String {
-        let backend = TestBackend::new(width, height);
-        let mut terminal = Terminal::new(backend).unwrap();
-        let bottom_y = height.saturating_sub(10);
-        terminal
-            .draw(|frame| {
-                let bottom_area = Rect::new(0, bottom_y, width, 10);
-                draw_pet(frame, state, bottom_area, running_count);
-            })
-            .unwrap();
-        let buf = terminal.backend().buffer().clone();
-        let area = buf.area;
-        let mut lines = Vec::new();
-        for y in area.y..area.y + area.height {
-            let mut line = String::new();
-            for x in area.x..area.x + area.width {
-                line.push_str(buf[(x, y)].symbol());
-            }
-            lines.push(line.trim_end().to_string());
-        }
-        while lines.first().is_some_and(|l| l.is_empty()) {
-            lines.remove(0);
-        }
-        // Remove trailing empty lines
-        while lines.last().is_some_and(|l| l.is_empty()) {
-            lines.pop();
-        }
-        lines.join("\n")
-    }
-
-    #[test]
-    fn snapshot_idle() {
-        let state = AppState::new("%0".into());
-        let output = render_pet_scene(&state, 0, 40, 14);
-        let expected = [
-            "  ▄ ▄  ▄ ▄",
-            " ▄▀▀▀▄ ▄▀▀▀▄                       ▄▄▄▄",
-            "  ▀ ▀  ▀ ▀                      ▟▙ ████",
-        ]
-        .join("\n");
-        assert_eq!(output, expected);
-    }
-
-    #[test]
-    fn snapshot_working_frame1() {
-        let mut state = AppState::new("%0".into());
-        state.pet_state = PetState::Working;
-        let panel_width = 40u16;
-        let working_width = CHAIR_WIDTH + 9;
-        let stop_x = panel_width.saturating_sub(DESK_OFFSET + DESK_WIDTH + working_width);
-        state.pet_x = stop_x;
-        state.pet_frame = 1;
-        let output = render_pet_scene(&state, 2, panel_width, 14);
-        let expected = [
-            "                          ▄ ▄   ▄▄  ▐█▌",
-            "                         ▄▀▀▀▄  █▀╴ ▐█▌",
-            "                          ▀ ▀   ▀▀ ▄▄▄▄",
-            "                                ▟▙ ████",
-        ]
-        .join("\n");
-        assert_eq!(output, expected);
-    }
-
-    #[test]
-    fn snapshot_walking_right() {
-        let mut state = AppState::new("%0".into());
-        state.pet_state = PetState::WalkRight;
-        state.pet_x = 10;
-        state.pet_frame = 1;
-        state.pet_walk_tick = 2;
-        state.pet_walk_seed = 1;
-        let output = render_pet_scene(&state, 1, 40, 14);
-        let expected = [
-            "           ▄ ▄  ▄ ▄                 ▐█▌",
-            "          ▄▀▀▀▄ ▄▀▀▀▄              ▄▄▄▄",
-            "          ▖ ▗   ▖ ▗             ▟▙ ████",
-        ]
-        .join("\n");
-        assert_eq!(output, expected);
-    }
-
-    #[test]
-    fn snapshot_walking_left() {
-        let mut state = AppState::new("%0".into());
-        state.pet_state = PetState::WalkLeft;
-        state.pet_x = 10;
-        state.pet_frame = 1;
-        state.pet_walk_tick = 2;
-        state.pet_walk_seed = 1;
-        let output = render_pet_scene(&state, 0, 40, 14);
-        let expected = [
-            "           ▄ ▄  ▄ ▄",
-            "          ▄▀▀▀▄ ▄▀▀▀▄              ▄▄▄▄",
-            "           ▗ ▖  ▗ ▖             ▟▙ ████",
-        ]
-        .join("\n");
-        assert_eq!(output, expected);
-    }
+    // Block-art snapshot tests removed when the Kitty-graphics image
+    // path took over `draw_pet`. The sprite helpers above still have
+    // unit tests for their glyph layouts so the on-shelf fallback
+    // doesn't silently rot.
 }

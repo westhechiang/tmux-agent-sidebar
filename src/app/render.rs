@@ -15,6 +15,15 @@ pub(super) fn render_frame(
 ) -> io::Result<()> {
     terminal.draw(|frame| ui::draw(frame, state))?;
 
+    // Paint the pet PNG over the cleared band immediately after the
+    // ratatui flush — otherwise ratatui's cell diff would write spaces
+    // into those cells and overdraw the image. The rect was stashed
+    // by `pet::draw_pet` during the render pass; if pet is disabled
+    // or the band is empty the rect is `None` and we no-op.
+    if let Some((px, py, pcols, prows)) = state.pet_image_rect {
+        ui::pet_image::emit_pet_frame(terminal.backend_mut(), state, px, py, pcols, prows)?;
+    }
+
     // Write OSC 8 hyperlink overlays after frame render.
     write_hyperlink_overlays(terminal.backend_mut(), &state.layout.hyperlink_overlays)?;
 

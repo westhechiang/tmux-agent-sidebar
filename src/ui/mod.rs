@@ -4,6 +4,7 @@ pub mod icons;
 pub mod notices;
 pub mod panes;
 pub mod pet;
+pub mod pet_image;
 pub mod text;
 
 use std::collections::HashMap;
@@ -20,6 +21,13 @@ pub const BOTTOM_PANEL_HEIGHT: u16 = 20;
 /// Rows reserved between the pane list and the bottom panel when the pet is
 /// enabled. The pet and its desk/chair all render inside this band so they
 /// never overdraw the pane list above or the bottom panel's border below.
+///
+/// Kept at 5 so the agent panel above still has room to breathe on
+/// short terminal heights. The Kitty-graphics renderer scales the
+/// 480×268 PNG into the cell grid (typically ~30 cols × 5 rows ≈
+/// 300×100 px on Ghostty); the scene is vertically squashed but
+/// recognizable. Users on tall terminals can bump
+/// `@sidebar_bottom_height` for more room.
 pub const PET_SCENE_HEIGHT: u16 = 5;
 
 /// Read `@sidebar_bottom_height` from tmux global options, falling back to the default.
